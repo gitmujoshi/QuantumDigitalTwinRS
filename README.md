@@ -20,6 +20,8 @@ maturin develop --features python
 
 Set `GOOGLE_API_KEY` for BAML/Gemini and optional `LANGFUSE_*` keys for tracing.
 
+**Optional — real / cloud simulators:** after policy + twin, you can map the approved pulse to a **gate circuit** and run it with **Qiskit Aer** (local) or **IBM Quantum** (account token). Install `pip install 'twinsentry-rs[quantum-cloud]'` or `'twinsentry-rs[ibm-quantum]'` and see [Quantum cloud backends](docs/quantum-cloud-backends.md).
+
 ## TwinSentry Lab (Streamlit UI)
 
 Interactive R&D console: natural-language commands, presets (Hadamard, π-pulse, noise, safety demo), extra **sample prompts** in the sidebar (`python/twin_sentry/sample_prompts.py`), dual **Bloch spheres** (reduced ρ for each qubit), metrics, and audit tabs.
@@ -36,6 +38,7 @@ Open the local URL shown in the terminal (default `http://localhost:8501`).
 
 - [Training guide](docs/training/TwinSentry-Training-Guide.md) — quantum & software tracks  
 - [Sample quantum prompts](docs/sample-quantum-prompts.md) — every preset and test intent (copy-paste reference)  
+- [Quantum cloud backends](docs/quantum-cloud-backends.md) — Aer + IBM Quantum (optional gate-circuit path)  
 - Infrastructure: `docker-compose.yaml` (Langfuse), `cloudbuild.yaml` (CI)
 
 ## License

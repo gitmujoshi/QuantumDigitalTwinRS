@@ -17,6 +17,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["maturin>=1.4,<2", "ruff>=0.4", "pytest>=8", "python-pptx>=1.0"]
+# Gate-circuit submission (optional; see docs/quantum-cloud-backends.md)
+quantum-cloud = ["qiskit>=1.0", "qiskit-aer>=0.14"]
+ibm-quantum = ["qiskit>=1.0", "qiskit-aer>=0.14", "qiskit-ibm-runtime>=0.25"]
 
 [tool.maturin]
 features = ["python"]

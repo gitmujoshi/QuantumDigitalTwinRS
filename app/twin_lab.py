@@ -177,6 +177,25 @@ def main() -> None:
                         st.rerun()
 
         st.divider()
+        st.subheader("Optional quantum cloud")
+        st.caption(
+            "Gate-equivalent circuit (Qiskit), not the Rust analog twin. "
+            "See `docs/quantum-cloud-backends.md`."
+        )
+        cloud_backend = st.selectbox(
+            "Submit circuit after twin",
+            options=["off", "local_aer", "ibm_quantum"],
+            index=0,
+            format_func=lambda x: {
+                "off": "Off (Rust twin only)",
+                "local_aer": "Qiskit Aer (local, pip install twinsentry-rs[quantum-cloud])",
+                "ibm_quantum": "IBM Quantum (QISKIT_IBM_TOKEN + pip install …[ibm-quantum])",
+            }[x],
+            key="cloud_backend_select",
+        )
+        cloud_shots = st.slider("Cloud shots", min_value=256, max_value=4096, value=1024, step=256)
+
+        st.divider()
         st.subheader("Environment")
         st.caption("`GOOGLE_API_KEY` → BAML/Gemini · `LANGFUSE_*` → traces")
         lf_host = os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
@@ -197,7 +216,13 @@ def main() -> None:
     if run and intent.strip():
         with st.spinner("BAML → Rust twin…"):
             try:
-                result = run_twin_pipeline(intent.strip(), n_steps=n_steps, dt=dt)
+                result = run_twin_pipeline(
+                    intent.strip(),
+                    n_steps=n_steps,
+                    dt=dt,
+                    cloud_backend=None if cloud_backend == "off" else cloud_backend,
+                    cloud_shots=cloud_shots,
+                )
                 st.session_state["last_result"] = result
             except Exception as e:
                 st.error(f"Pipeline failed: {e}")
@@ -212,6 +237,20 @@ def main() -> None:
         m2.metric("Amplitude", f"{pc.get('amplitude', float('nan')):.4f}")
         m3.metric("f_drive (Hz)", f"{pc.get('frequency_hz', 0):.3e}")
         m4.metric("Final t (s)", f"{result.get('final_time', 0):.3e}")
+        cloud = result.get("cloud")
+        if cloud:
+            st.subheader("Quantum cloud (gate circuit)")
+            if cloud.get("ok"):
+                st.success(
+                    f"Backend **{cloud.get('backend')}**"
+                    + (f" (`{cloud.get('backend_name')}`)" if cloud.get("backend_name") else "")
+                    + f" · shots={cloud.get('shots')}"
+                )
+                if cloud.get("job_id"):
+                    st.caption(f"Job id: `{cloud['job_id']}`")
+                st.json({"counts": cloud.get("counts")})
+            else:
+                st.warning(cloud.get("error", "Cloud run failed"))
 
         st.subheader("Reduced-state Bloch spheres")
         state = result.get("state") or []
@@ -235,9 +274,11 @@ def main() -> None:
         with tab_a:
             st.json(
                 {
+                    "gate_type": result.get("gate_type"),
                     "pulse_command": pc,
                     "noise_metadata": result.get("noise"),
                     "baml_error": result.get("baml_error"),
+                    "cloud": result.get("cloud"),
                 }
             )
             if result.get("baml_error"):
