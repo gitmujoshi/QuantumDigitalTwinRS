@@ -142,6 +142,12 @@ maturin develop --features python
 
 - **`cloudbuild.yaml`**: validates Compose, runs Rust **fmt/clippy/test** with **`python3-dev`** for PyO3, runs **ruff** when `pyproject.toml` exists at `_PYTHON_DIR`.
 
+### B.9 TwinSentry Lab (Streamlit)
+
+- **Entry:** `app/twin_lab.py` — run `streamlit run app/twin_lab.py` from the repo root after `maturin develop --features python` and `pip install` (or `pip install -e .`) for `streamlit`, `plotly`, `numpy`.
+- **Purpose:** Quantum engineers can enter **natural-language** intents, use **quick presets**, tune **RK4 steps** and **dt**, view **reduced-state Bloch spheres** for qubit 0 and qubit 1, inspect **pulse / noise / BAML error** JSON, and **trace IDs** when Langfuse is configured.
+- **Visualization:** `python/twin_sentry/quantum_viz.py` computes partial traces and Bloch vectors from the 4‑amplitude simulator state.
+
 ---
 
 ## 3. Joint section — End-to-end flow (review meetings)
