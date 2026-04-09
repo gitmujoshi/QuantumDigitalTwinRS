@@ -54,7 +54,14 @@ steps:
           cargo fmt --all -- --check
           cargo clippy --all-targets --all-features -- -D warnings
           cargo test --all-features
-          echo "Rust CI: OK"
+          # Python control plane: PyO3 extension + ruff + pytest (same image has python3-dev)
+          python3 -m pip install --upgrade pip
+          python3 -m pip install maturin pytest ruff
+          maturin develop --features python
+          python3 -m ruff check .
+          python3 -m ruff format --check .
+          python3 -m pytest -q tests/
+          echo "Rust + Python CI: OK"
         else
           echo "No Cargo.toml at ${RUST_DIR}; skipping Rust (add crate in Milestone 3)."
         fi
@@ -74,6 +81,11 @@ steps:
           exit 0
         fi
         cd "${PY_DIR}"
+        # Mixed Rust+Python repos: ruff/pytest run in rust-ci after maturin develop (needs native .so)
+        if [[ -f Cargo.toml ]]; then
+          echo "Cargo.toml present: Python checks already ran in rust-ci step; skipping duplicate."
+          exit 0
+        fi
         if [[ -f pyproject.toml ]] || [[ -f requirements.txt ]] || [[ -f requirements-dev.txt ]]; then
           python -m pip install --upgrade pip
           if [[ -f requirements.txt ]]; then pip install -r requirements.txt; fi

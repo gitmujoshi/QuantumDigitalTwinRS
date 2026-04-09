@@ -10,6 +10,14 @@ Digital twin control plane for quantum pulses: **BAML** policy, **Rust** simulat
 cargo test --all-features
 ```
 
+**Python tests** (from repo root; native extension tests need `maturin develop --features python`):
+
+```bash
+pip install pytest ruff
+ruff check . && ruff format --check .
+pytest -q tests/
+```
+
 **Python extension** (requires Python 3.11+)
 
 ```bash

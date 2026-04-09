@@ -31,5 +31,14 @@ line-length = 100
 target-version = "py311"
 exclude = ["baml_client"]
 
+[tool.ruff.format]
+exclude = ["baml_client"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
+pythonpath = ["python"]
+
 [tool.ruff.lint.per-file-ignores]
 "app/twin_lab.py" = ["E402"]

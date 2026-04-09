@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-qiskit = pytest.importorskip("qiskit")
+pytest.importorskip("qiskit")
 pytest.importorskip("qiskit_aer")
+pytest.importorskip("twin_sentry._native")
 
 from twin_sentry import PulseCommand  # noqa: E402
 from twin_sentry.quantum_cloud import (  # noqa: E402

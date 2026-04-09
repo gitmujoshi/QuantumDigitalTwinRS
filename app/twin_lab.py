@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import traceback
 from pathlib import Path
 
 # Repo root: app/twin_lab.py -> parent.parent
@@ -150,8 +151,22 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Simulation")
-        n_steps = st.slider("RK4 steps", min_value=16, max_value=2048, value=256, step=16)
-        dt_exp = st.slider("log₁₀(dt / s)", min_value=-14.0, max_value=-9.0, value=-11.5, step=0.5)
+        n_steps = st.slider(
+            "RK4 steps",
+            min_value=16,
+            max_value=2048,
+            value=256,
+            step=16,
+            key="rk4_steps",
+        )
+        dt_exp = st.slider(
+            "log₁₀(dt / s)",
+            min_value=-14.0,
+            max_value=-9.0,
+            value=-11.5,
+            step=0.5,
+            key="dt_exp_slider",
+        )
         dt = float(10**dt_exp)
         st.caption(f"dt = {dt:.3e} s")
 
@@ -193,7 +208,14 @@ def main() -> None:
             }[x],
             key="cloud_backend_select",
         )
-        cloud_shots = st.slider("Cloud shots", min_value=256, max_value=4096, value=1024, step=256)
+        cloud_shots = st.slider(
+            "Cloud shots",
+            min_value=256,
+            max_value=4096,
+            value=1024,
+            step=256,
+            key="cloud_shots",
+        )
 
         st.divider()
         st.subheader("Environment")
@@ -225,12 +247,40 @@ def main() -> None:
                 )
                 st.session_state["last_result"] = result
             except Exception as e:
-                st.error(f"Pipeline failed: {e}")
+                st.error(f"Pipeline failed: **{e}**")
+                with st.expander("Traceback (for debugging)"):
+                    st.code(traceback.format_exc(), language="python")
+                st.caption(
+                    "Check: `GOOGLE_API_KEY` for BAML, `maturin develop --features python` for the Rust twin, "
+                    "and optional `pip install 'twinsentry-rs[quantum-cloud]'` for local Aer."
+                )
                 st.session_state["last_result"] = None
 
     result = st.session_state.get("last_result")
     if result:
         st.divider()
+        dl_a, dl_b = st.columns(2)
+        raw_json = json.dumps(result, indent=2, default=str)
+        dl_a.download_button(
+            label="Download result JSON",
+            data=raw_json.encode("utf-8"),
+            file_name="twin_sentry_result.json",
+            mime="application/json",
+            use_container_width=True,
+            key="dl_full_json",
+        )
+        tid = result.get("trace_id")
+        if tid:
+            dl_b.download_button(
+                label="Download trace_id.txt",
+                data=str(tid).encode("utf-8"),
+                file_name="langfuse_trace_id.txt",
+                mime="text/plain",
+                use_container_width=True,
+                key="dl_trace_id",
+            )
+        else:
+            dl_b.caption("No trace ID (set Langfuse keys for traces).")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Fidelity |⟨00|ψ⟩|²", f"{result.get('fidelity', float('nan')):.6f}")
         pc = result.get("pulse_command") or {}
@@ -250,7 +300,10 @@ def main() -> None:
                     st.caption(f"Job id: `{cloud['job_id']}`")
                 st.json({"counts": cloud.get("counts")})
             else:
-                st.warning(cloud.get("error", "Cloud run failed"))
+                err = cloud.get("error", "Cloud run failed")
+                st.warning(f"Cloud: {err}")
+                if "Install" in err or "pip install" in err or "qiskit" in err.lower():
+                    st.caption("Install optional extras: see `docs/quantum-cloud-backends.md`.")
 
         st.subheader("Reduced-state Bloch spheres")
         state = result.get("state") or []
@@ -282,10 +335,18 @@ def main() -> None:
                 }
             )
             if result.get("baml_error"):
-                st.info("LLM/BAML path reported an issue; heuristic or fallback may be in use.")
+                st.info(
+                    "**BAML / LLM:** "
+                    + str(result["baml_error"])[:500]
+                    + ("…" if len(str(result["baml_error"])) > 500 else "")
+                    + " — using heuristic pulse if applicable."
+                )
         with tab_b:
             tid = result.get("trace_id")
             st.write("**Trace ID:**", tid or "(none — add Langfuse keys to env)")
+            if tid:
+                st.code(str(tid), language=None)
+                st.caption("Use “Download trace_id.txt” above or select the code box to copy.")
             host = os.environ.get("LANGFUSE_HOST", "http://localhost:3000").rstrip("/")
             st.markdown(f"[Langfuse UI]({host})")
         with tab_c:

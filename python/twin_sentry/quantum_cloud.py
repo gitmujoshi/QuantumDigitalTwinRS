@@ -108,10 +108,7 @@ def run_ibm_quantum(circuit: Any, shots: int) -> dict[str, Any]:
         return {
             "ok": False,
             "backend": "ibm_quantum",
-            "error": (
-                "Install IBM extras: pip install 'twinsentry-rs[ibm-quantum]' "
-                f"({e})"
-            ),
+            "error": (f"Install IBM extras: pip install 'twinsentry-rs[ibm-quantum]' ({e})"),
         }
 
     try:
