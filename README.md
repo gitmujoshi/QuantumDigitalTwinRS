@@ -40,6 +40,7 @@ Open the local URL shown in the terminal (default `http://localhost:8501`).
 - [Training guide](docs/training/TwinSentry-Training-Guide.md) — quantum & software tracks  
 - [Sample quantum prompts](docs/sample-quantum-prompts.md) — every preset and test intent (copy-paste reference)  
 - [Quantum cloud backends](docs/quantum-cloud-backends.md) — Aer + IBM Quantum (optional gate-circuit path)  
+- [Future: PQC / crypto project PRD](docs/prd/Post-Quantum-Crypto-Project-PRD.md) — draft requirements for a separate post-quantum readiness effort (not TwinSentry scope)  
 - Infrastructure: `docker-compose.yaml` (Langfuse), `cloudbuild.yaml` (CI)
 
 ## License
