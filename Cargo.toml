@@ -1,0 +1,22 @@
+[package]
+name = "twin_sentry"
+version = "0.1.0"
+edition = "2021"
+description = "TwinSentry-RS digital twin: 2-qubit TDSE + RK4 (SIMD) + SPSC pulse ingress"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["dep:pyo3"]
+
+[dependencies]
+crossbeam-channel = "0.5"
+num-complex = "0.4"
+# Portable SIMD (stable); aligns with PRD until `std::simd` is stabilized.
+wide = "0.7"
+pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }
+
+[dev-dependencies]

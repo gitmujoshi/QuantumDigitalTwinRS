@@ -1,0 +1,116 @@
+# TwinSentry-RS — Google Cloud Build CI for Rust (data plane) + Python (control plane).
+# Wire this file in Cloud Build triggers (GitHub/Cloud Source Repos) or run:
+#   gcloud builds submit --config=cloudbuild.yaml .
+#
+# Substitutions (override in trigger or CLI with --substitutions=^..^):
+#   _RUST_DIR: path to the Rust crate (Cargo.toml). Use "." for repo root.
+#   _PYTHON_DIR: path to Python package / app. Skip checks if empty or missing.
+#   _RUST_VERSION: Rust toolchain channel (e.g. 1.85, stable).
+#   _PYTHON_VERSION: minor version for python image (e.g. 3.12).
+#   _ARTIFACT_REGISTRY: full image name for optional Docker push (leave empty to skip).
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+substitutions:
+  _RUST_DIR: "."
+  _PYTHON_DIR: "."
+  _RUST_VERSION: "1.85"
+  _PYTHON_VERSION: "3.12"
+  _ARTIFACT_REGISTRY: ""
+
+steps:
+  # --- Validate Langfuse / infra compose (Milestone 1) ---
+  - id: validate-compose
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [[ -f docker-compose.yaml ]]; then
+          docker compose -f docker-compose.yaml config >/dev/null
+          echo "docker-compose.yaml: OK"
+        else
+          echo "docker-compose.yaml not found; skipping compose validation."
+        fi
+
+  # --- Rust: fmt, clippy, test (skipped if no Cargo.toml in _RUST_DIR) ---
+  - id: rust-ci
+    name: rust:${_RUST_VERSION}-bookworm
+    dir: /workspace
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        RUST_DIR="${_RUST_DIR}"
+        if [[ -f "${RUST_DIR}/Cargo.toml" ]]; then
+          cd "${RUST_DIR}"
+          apt-get update -qq && apt-get install -y -qq python3-dev
+          export PYO3_PYTHON="${PYO3_PYTHON:-python3}"
+          rustup component add rustfmt clippy
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo test --all-features
+          echo "Rust CI: OK"
+        else
+          echo "No Cargo.toml at ${RUST_DIR}; skipping Rust (add crate in Milestone 3)."
+        fi
+
+  # --- Python: ruff + pytest when pyproject.toml or requirements exist ---
+  - id: python-ci
+    name: python:${_PYTHON_VERSION}-slim-bookworm
+    dir: /workspace
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        PY_DIR="${_PYTHON_DIR}"
+        if [[ ! -d "${PY_DIR}" ]]; then
+          echo "Python dir ${PY_DIR} missing; skipping Python."
+          exit 0
+        fi
+        cd "${PY_DIR}"
+        if [[ -f pyproject.toml ]] || [[ -f requirements.txt ]] || [[ -f requirements-dev.txt ]]; then
+          python -m pip install --upgrade pip
+          if [[ -f requirements.txt ]]; then pip install -r requirements.txt; fi
+          if [[ -f requirements-dev.txt ]]; then pip install -r requirements-dev.txt; fi
+          if [[ -f pyproject.toml ]]; then
+            pip install ruff pytest
+            ruff check .
+            ruff format --check .
+          fi
+          if [[ -d tests ]] || [[ -f pytest.ini ]]; then
+            pip install pytest
+            pytest -q
+          elif [[ -f pyproject.toml ]] && grep -qE '^\[tool\.pytest' pyproject.toml 2>/dev/null; then
+            pip install pytest
+            pytest -q
+          fi
+          echo "Python CI: OK"
+        else
+          echo "No pyproject.toml/requirements in ${PY_DIR}; skipping Python."
+        fi
+
+  # --- Optional: build & push app image to Artifact Registry ---
+  - id: docker-push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [[ -z "${_ARTIFACT_REGISTRY}" ]]; then
+          echo "_ARTIFACT_REGISTRY empty; skipping image push."
+          exit 0
+        fi
+        if [[ ! -f Dockerfile ]]; then
+          echo "No Dockerfile at repo root; skipping image push."
+          exit 0
+        fi
+        docker build -t "${_ARTIFACT_REGISTRY}:$SHORT_SHA" .
+        docker push "${_ARTIFACT_REGISTRY}:$SHORT_SHA"
+        echo "Pushed ${_ARTIFACT_REGISTRY}:$SHORT_SHA"

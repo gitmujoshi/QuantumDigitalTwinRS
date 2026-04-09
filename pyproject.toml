@@ -1,0 +1,26 @@
+[build-system]
+requires = ["maturin>=1.4,<2"]
+build-backend = "maturin"
+
+[project]
+name = "twinsentry-rs"
+version = "0.1.0"
+description = "TwinSentry-RS: BAML policy + Rust twin + Langfuse audit"
+requires-python = ">=3.11"
+dependencies = [
+  "baml-py==0.208.5",
+  "langfuse>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["maturin>=1.4,<2", "ruff>=0.4", "pytest>=8", "python-pptx>=1.0"]
+
+[tool.maturin]
+features = ["python"]
+module-name = "twin_sentry._native"
+python-source = "python"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["baml_client"]
