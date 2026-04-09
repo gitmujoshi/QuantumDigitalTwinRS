@@ -3,6 +3,8 @@
 **Audience:** Quantum hardware / control researchers **and** software engineers building the control plane.  
 **Version:** 0.1 (aligned with repo milestones 1–4)
 
+**Quantum fundamentals (background):** For Bloch sphere, Schrödinger evolution, gates vs pulses, noise (T1/T2), benchmarking intuition, and how those ideas map to this repo, see **[Quantum-Engineering-Fundamentals.md](Quantum-Engineering-Fundamentals.md)**.
+
 ---
 
 ## 1. Purpose of this document
@@ -187,6 +189,7 @@ maturin develop --features python
 
 ## 5. References (in-repo)
 
+- [Quantum-Engineering-Fundamentals.md](Quantum-Engineering-Fundamentals.md) — conceptual background for quantum engineers  
 - `baml_src/quantum.baml` — policy schema  
 - `src/twin.rs`, `src/rk4.rs`, `src/hamiltonian.rs` — physics + integration  
 - `python/twin_sentry/controller.py` — Langfuse + orchestration  
@@ -207,4 +210,4 @@ maturin develop --features python
 
 ## 7. Document maintenance
 
-When milestones change (e.g., Streamlit UI, extra qubits, new gates), update this guide and the slide deck in **`docs/training/`** together so training stays consistent with the repo.
+When milestones change (e.g., Streamlit UI, extra qubits, new gates), update this guide and the slide deck in **`docs/training/`** together so training stays consistent with the repo. If physics or vocabulary changes, update **[Quantum-Engineering-Fundamentals.md](Quantum-Engineering-Fundamentals.md)** in the same pass so fundamentals and product docs stay aligned.

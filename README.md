@@ -36,6 +36,7 @@ Open the local URL shown in the terminal (default `http://localhost:8501`).
 
 ## Docs
 
+- [Quantum engineering fundamentals](docs/training/Quantum-Engineering-Fundamentals.md) — background for quantum engineers (states, gates, noise, control, link to TwinSentry)  
 - [Training guide](docs/training/TwinSentry-Training-Guide.md) — quantum & software tracks  
 - [Sample quantum prompts](docs/sample-quantum-prompts.md) — every preset and test intent (copy-paste reference)  
 - [Quantum cloud backends](docs/quantum-cloud-backends.md) — Aer + IBM Quantum (optional gate-circuit path)  
