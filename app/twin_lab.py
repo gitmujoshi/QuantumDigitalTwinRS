@@ -33,25 +33,7 @@ from twin_sentry.quantum_viz import (
     partial_trace_qubit1,
     state_vector_from_tuples,
 )
-
-# --- Presets (natural-language intents for BAML / heuristics) ---
-PRESETS: dict[str, str] = {
-    "Hadamard": (
-        "Apply a Hadamard-style superposition pulse on qubit 0 with moderate amplitude "
-        "and 5 GHz drive, duration 80 nanoseconds, ideal (no noise)."
-    ),
-    "Pi pulse": (
-        "Apply a pi pulse on qubit 0 for a bit-flip style rotation, amplitude about 0.45, "
-        "5 GHz, 80 ns duration."
-    ),
-    "Noise stress test": (
-        "Stress test with elevated digital-twin noise: T2 dephasing relative 0.08 and "
-        "thermal jitter relative 0.07, amplitude 0.3, 5 GHz."
-    ),
-    "Safety violation (demo)": (
-        "Unsafe operating point: request amplitude 1.5 on the drive (policy stress test)."
-    ),
-}
+from twin_sentry.sample_prompts import SAMPLE_PROMPTS, SIDEBAR_PRESETS
 
 
 def _bloch_sphere_mesh(n_u: int = 28, n_v: int = 14) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -164,7 +146,7 @@ def main() -> None:
     )
 
     if "intent_box" not in st.session_state:
-        st.session_state.intent_box = PRESETS["Hadamard"]
+        st.session_state.intent_box = SIDEBAR_PRESETS["Hadamard"]
 
     with st.sidebar:
         st.header("Simulation")
@@ -175,10 +157,24 @@ def main() -> None:
 
         st.divider()
         st.header("Quick presets")
-        for name in PRESETS:
+        for name in SIDEBAR_PRESETS:
             if st.button(name, use_container_width=True, key=f"preset_{name}"):
-                st.session_state.intent_box = PRESETS[name]
+                st.session_state.intent_box = SIDEBAR_PRESETS[name]
                 st.rerun()
+
+        st.subheader("More sample prompts")
+        labels = [label for label, _ in SAMPLE_PROMPTS]
+        pick = st.selectbox(
+            "Pick a test prompt",
+            options=["(choose…)"] + labels,
+            key="sample_prompt_picker",
+        )
+        if st.button("Insert into command box", use_container_width=True, key="insert_sample"):
+            if pick and pick != "(choose…)":
+                for label, text in SAMPLE_PROMPTS:
+                    if label == pick:
+                        st.session_state.intent_box = text
+                        st.rerun()
 
         st.divider()
         st.subheader("Environment")
