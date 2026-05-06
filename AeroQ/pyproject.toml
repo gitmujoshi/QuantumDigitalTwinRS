@@ -29,6 +29,16 @@ pennylane_amd = [
   # - pennylane-lightning[gpu]
   # - catalyst
 ]
+qsvt = [
+  "pennylane>=0.41",
+  # Optional:
+  # - scipy (for sparse matrices)
+  # - catalyst (for JIT)
+]
+qml = [
+  "pennylane>=0.41",
+  "torch>=2.2",
+]
 qiskit_ibm = [
   "qiskit>=1.1",
   "qiskit-ibm-runtime>=0.25",

@@ -12,6 +12,7 @@ dependencies = [
   "langfuse>=2.0",
   "numpy>=1.26",
   "plotly>=5.18",
+  "pyyaml>=6.0.1",
   "streamlit>=1.31",
 ]
 
