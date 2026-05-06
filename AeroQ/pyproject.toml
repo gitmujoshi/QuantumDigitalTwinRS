@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aeroq"
+version = "0.1.0"
+description = "AeroQ: hybrid quantum-classical CFD acceleration (MVP scaffold)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "AeroQ Contributors" }]
+dependencies = [
+  "numpy>=2.0",
+  "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5",
+]
+llm = [
+  # Keep version aligned with generated `baml_client/`
+  "baml-py==0.208.5",
+]
+pennylane_amd = [
+  "pennylane>=0.41",
+  # Optional GPU simulator + JIT stack (install separately as appropriate for your machine):
+  # - pennylane-lightning[gpu]
+  # - catalyst
+]
+qiskit_ibm = [
+  "qiskit>=1.1",
+  "qiskit-ibm-runtime>=0.25",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["baml_client"]
+

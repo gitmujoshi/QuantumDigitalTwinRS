@@ -1,0 +1,14 @@
+backend: pennylane_amd
+
+pennylane_amd:
+  device: lightning.gpu
+  wires: 8
+  shots: null
+  use_catalyst_jit: false
+
+qiskit_ibm:
+  instance: null
+  backend_name: null
+  prefer_simulator: true
+  shots: 1024
+
