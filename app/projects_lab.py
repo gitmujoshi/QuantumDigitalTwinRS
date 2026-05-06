@@ -27,6 +27,11 @@ _AEROQ_SRC = _ROOT / "AeroQ" / "src"
 if _AEROQ_SRC.exists() and str(_AEROQ_SRC) not in sys.path:
     sys.path.insert(0, str(_AEROQ_SRC))
 
+# Make PQC readiness demo importable without installing it.
+_PYTHON_DIR = _ROOT / "python"
+if _PYTHON_DIR.exists() and str(_PYTHON_DIR) not in sys.path:
+    sys.path.insert(0, str(_PYTHON_DIR))
+
 
 def _read_text(path: Path) -> str:
     try:
@@ -115,6 +120,63 @@ def _aeroq_panel() -> None:
             st.code(traceback.format_exc())
 
 
+def _twinsentry_panel() -> None:
+    st.subheader("TwinSentry — Digital twin (intent → policy → simulation)")
+    st.caption(
+        "Runs the TwinSentry control plane. For full visualization, use `streamlit run app/twin_lab.py`."
+    )
+
+    try:
+        from twin_sentry.controller import run_twin_pipeline  # type: ignore
+        from twin_sentry.sample_prompts import SAMPLE_PROMPTS, SIDEBAR_PRESETS  # type: ignore
+    except Exception:
+        st.error(
+            "Could not import TwinSentry modules. If the native extension isn't built yet, run:\n"
+            "`pip install maturin && maturin develop --features python`"
+        )
+        st.code(traceback.format_exc())
+        return
+
+    preset_names = list(SIDEBAR_PRESETS.keys())
+    preset_name = st.selectbox("Preset", ["(custom)"] + preset_names, index=0)
+
+    if preset_name != "(custom)":
+        default_intent = str(SIDEBAR_PRESETS[preset_name])
+    else:
+        default_intent = str(SAMPLE_PROMPTS[0]) if SAMPLE_PROMPTS else "Apply a safe Hadamard-like pulse."
+
+    intent = st.text_area("User intent", value=default_intent, height=120)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        n_steps = st.slider("RK4 steps", min_value=16, max_value=512, value=128, step=16)
+    with col2:
+        dt = st.number_input("dt (seconds)", value=2e-12, format="%.2e")
+    with col3:
+        cloud_backend = st.selectbox("Cloud backend (optional)", [None, "local_aer", "ibm_quantum"], index=0)
+
+    cloud_shots = st.slider("Cloud shots", min_value=128, max_value=8192, value=1024, step=128)
+
+    if st.button("Run TwinSentry pipeline", type="primary"):
+        try:
+            out = run_twin_pipeline(
+                intent,
+                n_steps=int(n_steps),
+                dt=float(dt),
+                cloud_backend=cloud_backend,
+                cloud_shots=int(cloud_shots),
+            )
+            fid = out.get("fidelity", None)
+            if fid is not None:
+                st.success(f"Run complete. Fidelity proxy: **{float(fid):.6f}**")
+            else:
+                st.success("Run complete.")
+            st.json(out)
+        except Exception:
+            st.error("TwinSentry run failed.")
+            st.code(traceback.format_exc())
+
+
 def _pqc_panel() -> None:
     st.subheader("Post-Quantum Crypto — Readiness sandbox")
 
@@ -138,6 +200,64 @@ def _pqc_panel() -> None:
         st.write("- RSA / ECC are not considered post-quantum safe under Shor on a large fault-tolerant QPU.")
         st.write("- PQC migration prioritizes long-lived secrets (harvest-now, decrypt-later).")
 
+    st.markdown("---")
+    st.markdown("#### Interactive demos (engineering)")
+
+    try:
+        from pqc_readiness.demo import kem_demo, signature_demo  # type: ignore
+    except Exception:
+        st.error("Could not import `python/pqc_readiness`. Verify it exists in this repo.")
+        st.code(traceback.format_exc())
+        return
+
+    tab_kem, tab_sig, tab_agility = st.tabs(["KEM / handshake", "Signatures", "Crypto-agility"])
+
+    with tab_kem:
+        mode = st.selectbox("Mode", ["hybrid", "classical", "pqc_stub"], index=0)
+        st.caption(
+            "Hybrid demo combines a classical shared secret (X25519) with a PQC placeholder KEM. "
+            "Replace the stub with ML-KEM once a PQC library is added."
+        )
+        if st.button("Run KEM demo"):
+            res = kem_demo(mode=mode)  # type: ignore[arg-type]
+            if res.ok:
+                st.success("Handshake successful (client/server derived the same key material).")
+            else:
+                st.error("Handshake failed.")
+            st.json(res.details)
+
+    with tab_sig:
+        mode = st.selectbox("Signature mode", ["hybrid", "classical", "pqc_stub"], index=0)
+        msg = st.text_input("Message to sign", value="hello, pqc")
+        if st.button("Run signature demo"):
+            res = signature_demo(mode=mode, message=msg)  # type: ignore[arg-type]
+            if res.ok:
+                st.success("Signature verification succeeded.")
+            else:
+                st.error("Signature verification failed.")
+            st.json(res.details)
+
+    with tab_agility:
+        st.markdown("**Config-driven algorithm selection (demo)**")
+        st.caption(
+            "This shows the core readiness idea: protocols should be able to switch algorithms by config, "
+            "support hybrid periods, and record what was used."
+        )
+        alg = st.selectbox("Handshake policy", ["classical-only", "hybrid-preferred", "pqc-only (future)"], index=1)
+        st.code(
+            "\n".join(
+                [
+                    "policy:",
+                    f"  handshake: {alg}",
+                    "  classical_kem: x25519",
+                    "  pqc_kem: ml-kem-768   # (future; demo uses stub today)",
+                    "  classical_sig: ed25519",
+                    "  pqc_sig: ml-dsa-65    # (future; demo uses stub today)",
+                    "  record_transcripts: true",
+                ]
+            )
+        )
+
 
 def _prd_panel() -> None:
     st.subheader("PRDs")
@@ -156,9 +276,11 @@ def main() -> None:
     st.title("Projects Lab")
     st.caption("Lightweight UI to test AeroQ and Post-Quantum Crypto workstreams.")
 
-    project = st.sidebar.radio("Choose a project", ["AeroQ", "Post-Quantum Crypto", "PRDs"], index=0)
+    project = st.sidebar.radio("Choose a project", ["TwinSentry", "AeroQ", "Post-Quantum Crypto", "PRDs"], index=0)
 
-    if project == "AeroQ":
+    if project == "TwinSentry":
+        _twinsentry_panel()
+    elif project == "AeroQ":
         _aeroq_panel()
     elif project == "Post-Quantum Crypto":
         _pqc_panel()
