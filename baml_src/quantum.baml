@@ -46,7 +46,7 @@ class QuantumPulse {
 }
 
 function ParsePulseFromIntent(user_intent: string) -> QuantumPulse {
-  client Gemini15Pro
+  client DefaultLLM
   prompt #"
     You are TwinSentry's quantum control policy assistant.
     From the user's natural-language intent, emit exactly one `QuantumPulse`.

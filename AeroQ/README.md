@@ -12,6 +12,15 @@ pip install -e ".[dev]"
 python scripts/smoke_kernel.py
 ```
 
+### OSSLBM demo (one-step simplified Lattice Boltzmann)
+
+Requires PennyLane (and optionally Catalyst).
+
+```bash
+pip install -e ".[dev,qsvt,pennylane_amd]"
+python scripts/osslbm_demo.py
+```
+
 ### Configure backend
 
 Edit `config.yaml`:

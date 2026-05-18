@@ -32,7 +32,23 @@ pip install maturin
 maturin develop --features python
 ```
 
-Set `GOOGLE_API_KEY` for BAML/Gemini and optional `LANGFUSE_*` keys for tracing.
+### LLM (BAML) configuration
+
+By default, TwinSentry’s BAML policy layer can run against a **local Ollama** model (recommended for macOS dev):
+
+```bash
+export OLLAMA_BASE_URL="http://localhost:11434/v1"
+export OLLAMA_MODEL="llama3.1:8b"
+export OLLAMA_API_KEY="ollama"   # typically ignored by Ollama, but required by some OpenAI-compatible clients
+```
+
+Optional cloud fallback (Gemini):
+
+```bash
+export GOOGLE_API_KEY="..."
+```
+
+Optional `LANGFUSE_*` keys enable tracing.
 
 **Optional — real / cloud simulators:** after policy + twin, you can map the approved pulse to a **gate circuit** and run it with **Qiskit Aer** (local) or **IBM Quantum** (account token). Install `pip install 'twinsentry-rs[quantum-cloud]'` or `'twinsentry-rs[ibm-quantum]'` and see [Quantum cloud backends](docs/quantum-cloud-backends.md).
 
@@ -76,6 +92,7 @@ python -m venv .venv
 - [Training guide](docs/training/TwinSentry-Training-Guide.md) — quantum & software tracks  
 - [Sample quantum prompts](docs/sample-quantum-prompts.md) — every preset and test intent (copy-paste reference)  
 - [Quantum cloud backends](docs/quantum-cloud-backends.md) — Aer + IBM Quantum (optional gate-circuit path)  
+- [AeroQ OSSLBM demo](docs/AeroQ-OSSLBM-Demo.md) — one-step simplified LBM circuit (PennyLane/Catalyst scaffold)
 - PRDs:
   - [TwinSentry Digital Twin PRD](docs/prd/TwinSentry-Digital-Twin-PRD.md)
   - [AeroQ Consolidated PRD (v3.0)](docs/prd/AeroQ-Consolidated-PRD-v3.0.md)

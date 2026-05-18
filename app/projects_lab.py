@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 import traceback
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +50,7 @@ def _parse_json_array(name: str, text: str) -> np.ndarray:
 
 
 def _aeroq_panel() -> None:
-    st.subheader("AeroQ — Linear system sandbox")
+    st.subheader("AeroQ — Use cases")
 
     try:
         from aeroq import AeroQKernel  # type: ignore
@@ -62,62 +63,120 @@ def _aeroq_panel() -> None:
         return
 
     cfg_path = _ROOT / "AeroQ" / "config.yaml"
-    colA, colB = st.columns([1, 1])
-    with colA:
-        backend = st.selectbox("Backend", ["pennylane_amd", "qiskit_ibm"], index=0)
-    with colB:
-        use_repo_config = st.checkbox("Use `AeroQ/config.yaml`", value=True)
 
-    # Default inputs
-    default_A = [[3.0, 1.0], [1.0, 2.0]]
-    default_b = [9.0, 8.0]
+    tab1, tab2 = st.tabs(["Linear solve (kernel)", "OSSLBM (one-step LBM circuit)"])
 
-    A_text = st.text_area("Matrix A (JSON)", value=json.dumps(default_A))
-    b_text = st.text_area("Vector/Matrix b (JSON)", value=json.dumps(default_b))
+    with tab1:
+        colA, colB = st.columns([1, 1])
+        with colA:
+            backend = st.selectbox("Backend", ["pennylane_amd", "qiskit_ibm"], index=0)
+        with colB:
+            use_repo_config = st.checkbox("Use `AeroQ/config.yaml`", value=True)
 
-    if st.button("Solve Ax=b", type="primary"):
-        try:
-            A = _parse_json_array("A", A_text)
-            b = _parse_json_array("b", b_text)
-            if b.ndim == 1:
-                b = b.reshape((-1,))
-        except Exception as e:
-            st.error(str(e))
-            return
+        default_A = [[3.0, 1.0], [1.0, 2.0]]
+        default_b = [9.0, 8.0]
 
-        try:
-            if use_repo_config and cfg_path.exists():
-                k = AeroQKernel(config_path=cfg_path)
-                # Override backend for this run (without rewriting config.yaml).
-                try:
-                    object.__setattr__(k.cfg, "backend", backend)
-                except Exception:
-                    pass
-            else:
-                # Create a minimal in-memory config by writing a temporary file.
-                tmp_cfg = _ROOT / ".aeroq_tmp_config.yaml"
-                tmp_cfg.write_text(
-                    "\n".join(
-                        [
-                            f"backend: {backend}",
-                            "pennylane_amd: {}",
-                            "qiskit_ibm: {}",
-                            "",
-                        ]
+        A_text = st.text_area("Matrix A (JSON)", value=json.dumps(default_A), key="aeroq_A")
+        b_text = st.text_area("Vector/Matrix b (JSON)", value=json.dumps(default_b), key="aeroq_b")
+
+        if st.button("Solve Ax=b", type="primary", key="aeroq_solve"):
+            try:
+                A = _parse_json_array("A", A_text)
+                b = _parse_json_array("b", b_text)
+                if b.ndim == 1:
+                    b = b.reshape((-1,))
+            except Exception as e:
+                st.error(str(e))
+                return
+
+            try:
+                if use_repo_config and cfg_path.exists():
+                    k = AeroQKernel(config_path=cfg_path)
+                    try:
+                        object.__setattr__(k.cfg, "backend", backend)
+                    except Exception:
+                        pass
+                else:
+                    tmp_cfg = _ROOT / ".aeroq_tmp_config.yaml"
+                    tmp_cfg.write_text(
+                        "\n".join(
+                            [
+                                f"backend: {backend}",
+                                "pennylane_amd: {}",
+                                "qiskit_ibm: {}",
+                                "",
+                            ]
+                        )
                     )
-                )
-                k = AeroQKernel(config_path=tmp_cfg)
+                    k = AeroQKernel(config_path=tmp_cfg)
 
-            x = k.solve_linear_system(A, b)
-            resid = A @ x - b
-            st.success(f"Solved using backend route: `{backend}`")
-            st.write("x:")
-            st.code(np.array2string(x, precision=6, floatmode="fixed"))
-            st.write("Residual ‖Ax-b‖₂:")
-            st.code(f"{float(np.linalg.norm(resid)):.6e}")
-        except Exception:
-            st.error("Solve failed.")
-            st.code(traceback.format_exc())
+                x = k.solve_linear_system(A, b)
+                resid = A @ x - b
+                st.success(f"Solved using backend route: `{backend}`")
+                st.write("x:")
+                st.code(np.array2string(x, precision=6, floatmode="fixed"))
+                st.write("Residual ‖Ax-b‖₂:")
+                st.code(f"{float(np.linalg.norm(resid)):.6e}")
+            except Exception:
+                st.error("Solve failed.")
+                st.code(traceback.format_exc())
+
+    with tab2:
+        st.caption(
+            "One-step simplified LBM circuit: amplitude-encode f0 → collision unitary → streaming permutation. "
+            "D2Q9 is embedded via nv=16 padding. Uses `AeroQ/.venv` so you don't need PennyLane in the root env."
+        )
+
+        nx = st.selectbox("Grid nx", [2, 4], index=0, key="osslbm_nx")
+        ny = st.selectbox("Grid ny", [2, 4], index=0, key="osslbm_ny")
+        velocity_set = st.selectbox("Velocity set", ["D2Q4", "D2Q9"], index=1, key="osslbm_vs")
+        nv = 4 if velocity_set == "D2Q4" else 16
+        theta = st.slider("Collision θ", min_value=0.0, max_value=1.2, value=0.35, step=0.05, key="osslbm_theta")
+        st.info("Streaming is now implemented as a **gate-level structured permutation network** (controlled modular shifts).")
+
+        if st.button("Run one-step OSSLBM", type="primary", key="osslbm_run"):
+            aeroq_py = _ROOT / "AeroQ" / ".venv" / "bin" / "python"
+            if not aeroq_py.exists():
+                st.error("Missing `AeroQ/.venv`. Create it and install deps in `AeroQ/` first.")
+                return
+
+            code = (
+                "import json, numpy as np\n"
+                "from aeroq.osslbm import OsslBmSpec, build_osslbm_one_step_qnode\n"
+                f"nx={int(nx)}; ny={int(ny)}; nv={int(nv)}\n"
+                "f0=np.zeros((ny,nx,nv), dtype=float)\n"
+                + ("f0[0,0,0]=1.0\n" if velocity_set == "D2Q4" else "f0[0,0,1]=1.0\n")
+                + f"spec=OsslBmSpec(nx=nx, ny=ny, nv=nv, velocity_set='{velocity_set}', collision_theta={float(theta)}, device='lightning.gpu')\n"
+                "qnode=build_osslbm_one_step_qnode(spec=spec, f0=f0, jit=True)\n"
+                "out=qnode()\n"
+                "probs=(np.abs(out)**2).tolist()\n"
+                "print(json.dumps({'nx':nx,'ny':ny,'nv':nv,'velocity_set':spec.velocity_set,'probs':probs}))\n"
+            )
+
+            try:
+                proc = subprocess.run(
+                    [str(aeroq_py), "-c", code],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(_ROOT / "AeroQ"),
+                    timeout=180,
+                    check=True,
+                )
+                payload = json.loads(proc.stdout.strip() or "{}")
+                st.success("OSSLBM step completed.")
+                st.json({k: payload[k] for k in payload if k != "probs"})
+                probs = np.asarray(payload.get("probs", []), dtype=float)
+                if probs.size:
+                    st.write("Top basis-state probabilities:")
+                    topk = np.argsort(-probs)[: min(12, probs.size)]
+                    st.code("\n".join([f"{int(i)}: {probs[int(i)]:.6f}" for i in topk]))
+            except subprocess.CalledProcessError as e:
+                st.error("OSSLBM run failed.")
+                st.code(e.stdout)
+                st.code(e.stderr)
+            except Exception:
+                st.error("OSSLBM run failed.")
+                st.code(traceback.format_exc())
 
 
 def _twinsentry_panel() -> None:
@@ -263,11 +322,14 @@ def _prd_panel() -> None:
     st.subheader("PRDs")
     aeroq_prd = _ROOT / "docs" / "prd" / "AeroQ-Consolidated-PRD-v3.0.md"
     pqc_prd = _ROOT / "docs" / "prd" / "Post-Quantum-Crypto-Project-PRD.md"
+    twinsentry_prd = _ROOT / "docs" / "prd" / "TwinSentry-Digital-Twin-PRD.md"
 
-    tab1, tab2 = st.tabs(["AeroQ PRD", "PQC PRD"])
+    tab1, tab2, tab3 = st.tabs(["TwinSentry PRD", "AeroQ PRD", "PQC PRD"])
     with tab1:
-        st.markdown(_read_text(aeroq_prd))
+        st.markdown(_read_text(twinsentry_prd))
     with tab2:
+        st.markdown(_read_text(aeroq_prd))
+    with tab3:
         st.markdown(_read_text(pqc_prd))
 
 
