@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,10 @@ from typing import Any
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
+
+from twin_sentry.llm_env import configure_ollama_for_baml  # noqa: E402
+
+configure_ollama_for_baml(_ROOT)
 
 from twin_sentry import PulseCommand, TwinEngine, pulse_queue  # noqa: E402
 
@@ -37,15 +42,36 @@ def _langfuse_client() -> Any:
     return Langfuse(public_key=pk, secret_key=sk, host=host)
 
 
-def _parse_pulse_with_baml(user_intent: str) -> tuple[Any | None, str | None]:
-    try:
-        from baml_client import b
+def _baml_parse_sync(user_intent: str) -> tuple[Any, str | None]:
+    from baml_client import b
+    from twin_sentry.baml_log import new_collector, persist_collector, save_enabled
 
-        pulse = b.ParsePulseFromIntent(user_intent)
-        return pulse, None
+    collector = new_collector() if save_enabled() else None
+    opts: dict[str, Any] = {"collector": collector} if collector is not None else {}
+    try:
+        pulse = b.ParsePulseFromIntent(user_intent, baml_options=opts)
+        log_path = persist_collector(collector, user_intent, ok=True)
+        return pulse, log_path
+    except Exception as e:
+        persist_collector(collector, user_intent, ok=False, error=str(e))
+        raise
+
+
+def _parse_pulse_with_baml(
+    user_intent: str, *, timeout_s: float = 90.0
+) -> tuple[Any | None, str | None, str | None]:
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_baml_parse_sync, user_intent)
+            pulse, log_path = fut.result(timeout=timeout_s)
+        return pulse, None, log_path
+    except FuturesTimeoutError:
+        msg = f"BAML/Ollama timed out after {timeout_s:.0f}s; using heuristic pulse"
+        logger.warning(msg)
+        return None, msg, None
     except Exception as e:
         logger.warning("BAML parse failed (%s); using heuristic pulse", e)
-        return None, str(e)
+        return None, str(e), None
 
 
 def _heuristic_pulse_command(intent: str) -> PulseCommand:
@@ -95,9 +121,18 @@ def _noise_metadata(pulse: Any) -> dict[str, Any]:
 
 def _parse_intent_all(
     user_intent: str,
-) -> tuple[PulseCommand, str | None, dict[str, Any], str | None, bool]:
-    """Returns ``cmd``, ``baml_error``, ``noise_meta``, ``gate_type``, ``baml_ok``."""
-    pulse, baml_error = _parse_pulse_with_baml(user_intent)
+) -> tuple[
+    PulseCommand,
+    str | None,
+    dict[str, Any],
+    str | None,
+    bool,
+    str | None,
+    list[tuple[float, float]] | None,
+    str | None,
+]:
+    """Returns cmd, baml_error, noise_meta, gate_type, baml_ok, baml_log_path, initial_state, gate_note."""
+    pulse, baml_error, baml_log_path = _parse_pulse_with_baml(user_intent)
     baml_ok = pulse is not None
     if pulse is not None:
         cmd = quantum_pulse_to_command(pulse)
@@ -106,17 +141,51 @@ def _parse_intent_all(
     else:
         cmd = _heuristic_pulse_command(user_intent)
         noise_meta = {}
-        gate_val = None
-    return cmd, baml_error, noise_meta, gate_val, baml_ok
+        gate_val = _infer_gate_from_intent(user_intent)
+
+    from twin_sentry.gate_mapping import apply_gate_mapping
+
+    setup = apply_gate_mapping(cmd, gate_val)
+    return (
+        setup.cmd,
+        baml_error,
+        noise_meta,
+        gate_val,
+        baml_ok,
+        baml_log_path,
+        setup.initial_state,
+        setup.description,
+    )
 
 
-def _run_rust_twin(cmd: PulseCommand, n_steps: int, dt: float) -> tuple[float, list[Any], float]:
+def _infer_gate_from_intent(intent: str) -> str | None:
+    text = intent.lower()
+    if "hadamard" in text or "h gate" in text:
+        return "HADAMARD"
+    if "cnot" in text:
+        return "CNOT"
+    if " pi " in f" {text} " or "π" in text:
+        return "X"
+    if "phase" in text or " z " in f" {text} ":
+        return "Z"
+    return None
+
+
+def _run_rust_twin(
+    cmd: PulseCommand,
+    n_steps: int,
+    dt: float,
+    *,
+    initial_state: list[tuple[float, float]] | None = None,
+) -> tuple[float, list[Any], float]:
     tx, rx = pulse_queue(64)
     try:
         tx.send(cmd)
     except Exception as e:
         logger.warning("queue send failed: %s", e)
     engine = TwinEngine()
+    if initial_state is not None:
+        engine.set_state(initial_state)
     engine.drain(rx)
     t = 0.0
     for _ in range(n_steps):
@@ -166,12 +235,17 @@ def _assemble_result(
     t: float,
     cloud_backend: str | None,
     cloud_shots: int,
+    baml_log_path: str | None = None,
+    gate_mapping: str | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "trace_id": trace_id,
+        "langfuse_enabled": trace_id is not None,
         "baml_error": baml_error,
+        "baml_log_path": baml_log_path,
         "noise": noise_meta,
         "gate_type": gate_val,
+        "gate_mapping": gate_mapping,
         "pulse_command": _pulse_command_dict(cmd),
         "fidelity": fid,
         "state": state,
@@ -180,6 +254,22 @@ def _assemble_result(
     cloud = _run_cloud_if_requested(cmd, gate_val, cloud_backend, cloud_shots)
     if cloud is not None:
         body["cloud"] = cloud
+
+    from twin_sentry.simulation_contract import build_simulation_payload
+
+    body["simulation_payload"] = build_simulation_payload(
+        success=True,
+        fidelity=fid,
+        state=state,
+        cloud=cloud,
+        shots=cloud_shots,
+        gate_type=gate_val,
+        business_telemetry={
+            "domain": "twin_sentry",
+            "fidelity_ground": fid,
+            "final_time_s": t,
+        },
+    )
     return body
 
 
@@ -212,12 +302,22 @@ def run_twin_pipeline(
             trace_id: str | None = getattr(root, "trace_id", None)
 
             with lf.start_as_current_observation(as_type="span", name="baml_parse") as baml_span:
-                cmd, baml_error, noise_meta, gate_val, baml_ok = _parse_intent_all(user_intent)
+                (
+                    cmd,
+                    baml_error,
+                    noise_meta,
+                    gate_val,
+                    baml_ok,
+                    baml_log_path,
+                    initial_state,
+                    gate_note,
+                ) = _parse_intent_all(user_intent)
                 baml_span.update(
                     output={
                         "ok": baml_ok,
                         "error": baml_error,
                         "gate_type": gate_val,
+                        "baml_log_path": baml_log_path,
                     },
                 )
 
@@ -231,6 +331,8 @@ def run_twin_pipeline(
                 logger.warning("queue send failed: %s", e)
 
             engine = TwinEngine()
+            if initial_state is not None:
+                engine.set_state(initial_state)
             engine.drain(rx)
 
             with lf.start_as_current_observation(
@@ -262,6 +364,8 @@ def run_twin_pipeline(
                 t,
                 cloud_backend,
                 cloud_shots,
+                baml_log_path,
+                gate_note,
             )
             root.update(output=result_body)
 
@@ -303,8 +407,17 @@ def _simulate_only(
     cloud_backend: str | None = None,
     cloud_shots: int = 1024,
 ) -> dict[str, Any]:
-    cmd, baml_error, noise_meta, gate_val, _baml_ok = _parse_intent_all(user_intent)
-    fid, state, t = _run_rust_twin(cmd, n_steps, dt)
+    (
+        cmd,
+        baml_error,
+        noise_meta,
+        gate_val,
+        _baml_ok,
+        baml_log_path,
+        initial_state,
+        gate_note,
+    ) = _parse_intent_all(user_intent)
+    fid, state, t = _run_rust_twin(cmd, n_steps, dt, initial_state=initial_state)
     return _assemble_result(
         trace_id,
         baml_error,
@@ -316,4 +429,6 @@ def _simulate_only(
         t,
         cloud_backend,
         cloud_shots,
+        baml_log_path,
+        gate_note,
     )

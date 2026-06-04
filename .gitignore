@@ -33,3 +33,9 @@ python/twin_sentry/**/*.dSYM/
 # Env (never commit secrets)
 .env
 .env.*
+
+# BAML LLM call logs (local audit)
+logs/baml/
+
+# Local AeroQ scratch config
+.aeroq_tmp_config.yaml

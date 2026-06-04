@@ -1,6 +1,6 @@
 # Business Guide — How companies can use this repo
 
-This repository is a **portfolio of three practical, company-relevant quantum workstreams**. It is designed to help business stakeholders understand:
+This repository is a **portfolio of four integrated quantum workstreams** (see [`docs/prd/Portfolio-Consolidated-PRD.md`](prd/Portfolio-Consolidated-PRD.md)). It is designed to help business stakeholders understand:
 
 - **What problems each workstream solves**
 - **What can be demoed today**
@@ -36,6 +36,16 @@ This repository is a **portfolio of three practical, company-relevant quantum wo
 **Business outcomes:**
 - A concrete technical narrative for funding, partnerships, and roadmap planning
 - Faster prototyping of “what would it take” to integrate quantum methods into simulation stacks
+
+---
+
+### Materials & Logistics (MatrixQ use cases in Projects Lab)
+**What it is:** **Materials (Li₂S VQE)** and **logistics (fleet VRP)** workflows from the MatrixQ PRD—runnable in this repo.
+
+**Mock mode:** Synthetic lab telemetry and QAOA bitstrings for stakeholder demos.  
+**Real-world mode:** Classical **SPSA** on a Li₂S toy potential (optional **Qiskit Aer** shots) and **greedy VRP** on generated metro coordinates with distance/fuel metrics.
+
+**Where to run:** Projects Lab → **Materials & Logistics** (always visible; switch sidebar **Real-world** for classical use cases).
 
 ---
 

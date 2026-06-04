@@ -1,10 +1,15 @@
 # QuantumDigitalTwinRS (Portfolio Repo)
 
-This repo contains **three quantum-focused workstreams** (each with a PRD and runnable demos):
+This repo is a **unified quantum portfolio sandbox** (canonical PRD: [`docs/prd/Portfolio-Consolidated-PRD.md`](docs/prd/Portfolio-Consolidated-PRD.md)):
 
-- **TwinSentry-RS**: digital twin control plane for quantum pulses (**BAML** policy, **Rust** 2‑qubit TDSE + RK4 simulation, **Langfuse** audit, **PyO3** bridge, Streamlit lab).
-- **AeroQ**: hybrid quantum‑classical **CFD acceleration** scaffold (HAL routing, linear-system kernel foundation, optional BAML hooks).
-- **Post‑Quantum Crypto Readiness**: PQC migration and “quantum‑safe” engineering demo (hybrid handshake/signature concepts + crypto‑agility).
+- **TwinSentry-RS**: NL → **BAML** policy → **Rust** 2‑qubit TDSE twin → **MatrixQ-aligned `simulation_payload`** → optional cloud / Langfuse.
+- **MatrixQ sandboxes** (mock): **VQE materials** (Li₂S preset) and **logistics QAOA** (VRP) with shared JSON contract.
+- **AeroQ**: hybrid quantum‑classical **CFD** scaffold (HAL, OSSLBM, weather mock).
+- **Post‑Quantum Crypto Readiness**: PQC migration demo (orthogonal to the twin).
+
+**Execution mode** (sidebar): **Mock (sandbox)** vs **Real-world** — see `python/portfolio_mode.py`.
+
+**Sales demos** (non-quantum audience): Projects Lab → **Materials & Logistics** — curated customer scenarios; guide: [`docs/sales-demo-guide.md`](docs/sales-demo-guide.md).
 
 If you want the fastest “try everything” path, run the **Projects Lab UI** (`app/projects_lab.py`) and pick a project in the sidebar.
 
@@ -38,7 +43,7 @@ By default, TwinSentry’s BAML policy layer can run against a **local Ollama** 
 
 ```bash
 export OLLAMA_BASE_URL="http://localhost:11434/v1"
-export OLLAMA_MODEL="llama3.1:8b"
+export OLLAMA_MODEL="llama3.1:latest"   # or: llama3.1:8b after `ollama pull llama3.1:8b`
 export OLLAMA_API_KEY="ollama"   # typically ignored by Ollama, but required by some OpenAI-compatible clients
 ```
 
@@ -48,7 +53,7 @@ Optional cloud fallback (Gemini):
 export GOOGLE_API_KEY="..."
 ```
 
-Optional `LANGFUSE_*` keys enable tracing.
+Optional **Langfuse** tracing: `./scripts/start_langfuse.sh` then `./scripts/run_twin_lab.sh` ([setup guide](docs/langfuse-local-setup.md)).
 
 **Optional — real / cloud simulators:** after policy + twin, you can map the approved pulse to a **gate circuit** and run it with **Qiskit Aer** (local) or **IBM Quantum** (account token). Install `pip install 'twinsentry-rs[quantum-cloud]'` or `'twinsentry-rs[ibm-quantum]'` and see [Quantum cloud backends](docs/quantum-cloud-backends.md).
 
@@ -93,6 +98,7 @@ python -m venv .venv
 - [Sample quantum prompts](docs/sample-quantum-prompts.md) — every preset and test intent (copy-paste reference)  
 - [Quantum cloud backends](docs/quantum-cloud-backends.md) — Aer + IBM Quantum (optional gate-circuit path)  
 - [AeroQ OSSLBM demo](docs/AeroQ-OSSLBM-Demo.md) — one-step simplified LBM circuit (PennyLane/Catalyst scaffold)
+- [Domain mocks](docs/domain-mocks.md) — weather NWP, drug-discovery pipeline, production QPU vendor mocks
 - PRDs:
   - [TwinSentry Digital Twin PRD](docs/prd/TwinSentry-Digital-Twin-PRD.md)
   - [AeroQ Consolidated PRD (v3.0)](docs/prd/AeroQ-Consolidated-PRD-v3.0.md)

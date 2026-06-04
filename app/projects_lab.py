@@ -33,6 +33,27 @@ _PYTHON_DIR = _ROOT / "python"
 if _PYTHON_DIR.exists() and str(_PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(_PYTHON_DIR))
 
+from portfolio_mode import (  # noqa: E402
+    MODE_MOCK,
+    MODE_REAL,
+    cloud_backend_selectbox,
+    get_execution_mode,
+    require_mock_mode,
+    mode_banner,
+    WEATHER_MOCK_BACKENDS,
+    WEATHER_REAL_BACKENDS,
+)
+
+_APP_SIDEBAR = _ROOT / "app"
+if str(_APP_SIDEBAR) not in sys.path:
+    sys.path.insert(0, str(_APP_SIDEBAR))
+from lab_sidebar import (  # noqa: E402
+    render_execution_mode_block,
+    render_materials_logistics_solver_sidebar,
+    render_navigation_guide,
+    render_project_picker,
+)
+
 
 def _read_text(path: Path) -> str:
     try:
@@ -51,6 +72,7 @@ def _parse_json_array(name: str, text: str) -> np.ndarray:
 
 def _aeroq_panel() -> None:
     st.subheader("AeroQ — Use cases")
+    mode_banner()
 
     try:
         from aeroq import AeroQKernel  # type: ignore
@@ -64,7 +86,12 @@ def _aeroq_panel() -> None:
 
     cfg_path = _ROOT / "AeroQ" / "config.yaml"
 
-    tab1, tab2 = st.tabs(["Linear solve (kernel)", "OSSLBM (one-step LBM circuit)"])
+    mode = get_execution_mode()
+    tab_labels = ["Linear solve (kernel)", "OSSLBM (one-step LBM circuit)"]
+    if mode == MODE_MOCK:
+        tab_labels.append("Regional forecast (mock NWP)")
+    tabs = st.tabs(tab_labels)
+    tab1, tab2 = tabs[0], tabs[1]
 
     with tab1:
         colA, colB = st.columns([1, 1])
@@ -122,10 +149,16 @@ def _aeroq_panel() -> None:
                 st.code(traceback.format_exc())
 
     with tab2:
-        st.caption(
-            "One-step simplified LBM circuit: amplitude-encode f0 → collision unitary → streaming permutation. "
-            "D2Q9 is embedded via nv=16 padding. Uses `AeroQ/.venv` so you don't need PennyLane in the root env."
-        )
+        if mode == MODE_MOCK:
+            st.caption(
+                "Switch **Execution mode** to **Real-world** to run OSSLBM with PennyLane in `AeroQ/.venv`, "
+                "or use Linear solve / Regional forecast mocks in Mock mode."
+            )
+        else:
+            st.caption(
+                "One-step simplified LBM circuit (PennyLane in `AeroQ/.venv`). "
+                "D2Q9 embedded via nv=16 padding."
+            )
 
         nx = st.selectbox("Grid nx", [2, 4], index=0, key="osslbm_nx")
         ny = st.selectbox("Grid ny", [2, 4], index=0, key="osslbm_ny")
@@ -134,7 +167,9 @@ def _aeroq_panel() -> None:
         theta = st.slider("Collision θ", min_value=0.0, max_value=1.2, value=0.35, step=0.05, key="osslbm_theta")
         st.info("Streaming is now implemented as a **gate-level structured permutation network** (controlled modular shifts).")
 
-        if st.button("Run one-step OSSLBM", type="primary", key="osslbm_run"):
+        if mode == MODE_MOCK:
+            st.warning("OSSLBM is disabled in **Mock** mode. Select **Real-world** in the sidebar.")
+        elif st.button("Run one-step OSSLBM", type="primary", key="osslbm_run"):
             aeroq_py = _ROOT / "AeroQ" / ".venv" / "bin" / "python"
             if not aeroq_py.exists():
                 st.error("Missing `AeroQ/.venv`. Create it and install deps in `AeroQ/` first.")
@@ -178,9 +213,94 @@ def _aeroq_panel() -> None:
                 st.error("OSSLBM run failed.")
                 st.code(traceback.format_exc())
 
+    if mode == MODE_MOCK:
+        with tabs[2]:
+            _weather_mock_tab()
+
+
+def _weather_mock_tab() -> None:
+    st.caption(
+        "Toy regional weather workflow: grid → backend routing (classical / QSVT / QPU stub) → "
+        "synthetic forecast metrics. Not a real NWP model."
+    )
+    try:
+        from domain_mocks.weather import WeatherRunRequest, run_regional_forecast_mock
+    except Exception:
+        st.error("Could not import `python/domain_mocks`.")
+        st.code(traceback.format_exc())
+        return
+
+    region = st.text_input("Region id", value="us-east-conus", key="wx_region")
+    horizon = st.slider("Horizon (hours)", 6, 72, 24, key="wx_horizon")
+    backend = st.selectbox(
+        "Acceleration backend",
+        list(WEATHER_MOCK_BACKENDS),
+        key="wx_backend",
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        nx = st.selectbox("Grid nx", [16, 32, 64], index=1, key="wx_nx")
+    with c2:
+        ny = st.selectbox("Grid ny", [16, 32, 64], index=1, key="wx_ny")
+
+    if st.button("Run regional forecast (mock)", type="primary", key="wx_run"):
+        req = WeatherRunRequest(
+            region=region,
+            horizon_hours=int(horizon),
+            grid_nx=int(nx),
+            grid_ny=int(ny),
+            backend=backend,  # type: ignore[arg-type]
+        )
+        st.json(run_regional_forecast_mock(req))
+
+
+def _drug_discovery_panel() -> None:
+    st.subheader("Drug discovery — Pipeline mock")
+    mode_banner()
+    if not require_mock_mode(
+        real_message=(
+            "**Real-world** drug pipelines (OpenMM, PySCF, cloud chemistry) are not bundled. "
+            "Switch sidebar to **Mock (sandbox)** for the staged demo."
+        ),
+    ):
+        return
+
+    st.caption(
+        "Classical docking → optional VQE chemistry stub → ML surrogate. "
+        "Replace stubs with OpenMM / PySCF / real QPUs for production."
+    )
+    try:
+        from domain_mocks.drug_discovery import DrugPipelineRequest, run_drug_pipeline_mock
+    except Exception:
+        st.error("Could not import `python/domain_mocks`.")
+        st.code(traceback.format_exc())
+        return
+
+    mol = st.text_input("Molecule id", value="cmpd-2026-0142", key="drug_mol")
+    target = st.text_input("Target protein", value="Kinase-X", key="drug_target")
+    backend = st.selectbox(
+        "Pipeline backend",
+        ["hybrid_vqe", "classical_only", "surrogate_ml"],
+        key="drug_backend",
+    )
+
+    if st.button("Run discovery pipeline (mock)", type="primary", key="drug_run"):
+        req = DrugPipelineRequest(
+            molecule_id=mol,
+            target_protein=target,
+            backend=backend,  # type: ignore[arg-type]
+        )
+        out = run_drug_pipeline_mock(req)
+        if out.get("lead_candidate"):
+            st.success("Mock lead candidate (passes toy thresholds).")
+        else:
+            st.warning("Mock result: does not pass toy lead thresholds.")
+        st.json(out)
+
 
 def _twinsentry_panel() -> None:
     st.subheader("TwinSentry — Digital twin (intent → policy → simulation)")
+    mode_banner()
     st.caption(
         "Runs the TwinSentry control plane. For full visualization, use `streamlit run app/twin_lab.py`."
     )
@@ -212,7 +332,8 @@ def _twinsentry_panel() -> None:
     with col2:
         dt = st.number_input("dt (seconds)", value=2e-12, format="%.2e")
     with col3:
-        cloud_backend = st.selectbox("Cloud backend (optional)", [None, "local_aer", "ibm_quantum"], index=0)
+        cb = cloud_backend_selectbox(key="projects_cloud_backend")
+    cloud_backend = None if cb == "off" else cb
 
     cloud_shots = st.slider("Cloud shots", min_value=128, max_value=8192, value=1024, step=128)
 
@@ -230,10 +351,23 @@ def _twinsentry_panel() -> None:
                 st.success(f"Run complete. Fidelity proxy: **{float(fid):.6f}**")
             else:
                 st.success("Run complete.")
+            sp = out.get("simulation_payload")
+            if sp:
+                with st.expander("Simulation contract (MatrixQ-aligned)", expanded=False):
+                    st.json(sp)
             st.json(out)
         except Exception:
             st.error("TwinSentry run failed.")
             st.code(traceback.format_exc())
+
+
+def _materials_logistics_panel() -> None:
+    _APP_DIR = _ROOT / "app"
+    if str(_APP_DIR) not in sys.path:
+        sys.path.insert(0, str(_APP_DIR))
+    from materials_logistics_ui import render_materials_logistics_panel
+
+    render_materials_logistics_panel()
 
 
 def _pqc_panel() -> None:
@@ -320,30 +454,66 @@ def _pqc_panel() -> None:
 
 def _prd_panel() -> None:
     st.subheader("PRDs")
+    consolidated = _ROOT / "docs" / "prd" / "Portfolio-Consolidated-PRD.md"
     aeroq_prd = _ROOT / "docs" / "prd" / "AeroQ-Consolidated-PRD-v3.0.md"
     pqc_prd = _ROOT / "docs" / "prd" / "Post-Quantum-Crypto-Project-PRD.md"
     twinsentry_prd = _ROOT / "docs" / "prd" / "TwinSentry-Digital-Twin-PRD.md"
+    matrixq_prd = _ROOT / "docs" / "prd" / "MatrixQ-Sandbox-Platform-PRD.md"
+    matrixq_cmp = _ROOT / "docs" / "prd" / "MatrixQ-vs-Portfolio-Comparison.md"
+    matrixq_design = _ROOT / "docs" / "DESIGN_DOC_Master.md"
 
-    tab1, tab2, tab3 = st.tabs(["TwinSentry PRD", "AeroQ PRD", "PQC PRD"])
+    tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+        [
+            "Portfolio (canonical)",
+            "TwinSentry",
+            "AeroQ",
+            "PQC",
+            "MatrixQ PRD",
+            "MatrixQ design",
+            "MatrixQ comparison",
+        ]
+    )
+    with tab0:
+        st.markdown(_read_text(consolidated))
     with tab1:
         st.markdown(_read_text(twinsentry_prd))
     with tab2:
         st.markdown(_read_text(aeroq_prd))
     with tab3:
         st.markdown(_read_text(pqc_prd))
+    with tab4:
+        st.markdown(_read_text(matrixq_prd))
+    with tab5:
+        st.markdown(_read_text(matrixq_design))
+    with tab6:
+        st.markdown(_read_text(matrixq_cmp))
 
 
 def main() -> None:
     st.set_page_config(page_title="Projects Lab", layout="wide")
     st.title("Projects Lab")
-    st.caption("Lightweight UI to test AeroQ and Post-Quantum Crypto workstreams.")
+    st.caption(
+        "Portfolio: TwinSentry, AeroQ, Materials & Logistics (mock/real), drug mock, PQC, PRDs."
+    )
 
-    project = st.sidebar.radio("Choose a project", ["TwinSentry", "AeroQ", "Post-Quantum Crypto", "PRDs"], index=0)
+    with st.sidebar:
+        render_navigation_guide(current="projects")
+        st.divider()
+        render_execution_mode_block()
+        st.divider()
+        project = render_project_picker()
+        if project == "Materials & Logistics":
+            st.divider()
+            render_materials_logistics_solver_sidebar(use_container=True)
 
     if project == "TwinSentry":
         _twinsentry_panel()
     elif project == "AeroQ":
         _aeroq_panel()
+    elif project == "Materials & Logistics":
+        _materials_logistics_panel()
+    elif project == "Drug discovery (mock)":
+        _drug_discovery_panel()
     elif project == "Post-Quantum Crypto":
         _pqc_panel()
     else:

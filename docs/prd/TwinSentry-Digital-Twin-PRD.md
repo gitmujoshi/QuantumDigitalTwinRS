@@ -1,8 +1,8 @@
 # PRD — TwinSentry Digital Twin Control Plane (v0.1)
 
-**Status:** Draft  
+**Status:** Module appendix (see canonical [Portfolio-Consolidated-PRD.md](Portfolio-Consolidated-PRD.md))  
 **Scope:** TwinSentry-RS (this repo)  
-**Last updated:** 2026-05-05
+**Last updated:** 2026-05-20
 
 ---
 
@@ -36,6 +36,7 @@ TwinSentry-RS addresses this by making **policy the enforcement point**, **simul
 | G4 | Provide **auditability**: trace intent → schema → execution → score in Langfuse. |
 | G5 | Provide an **interactive UI** (Streamlit) for demos, presets, and review meetings. |
 | G6 | Keep a clean path to optional **cloud backends** (gate-circuit mapping) for integration testing. |
+| G7 | Emit **MatrixQ-aligned `simulation_payload`** (`counts`, `bloch_vectors`, metadata) on every run. |
 
 ---
 

@@ -20,11 +20,20 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 if str(_ROOT / "python") not in sys.path:
     sys.path.insert(0, str(_ROOT / "python"))
+if str(_ROOT / "app") not in sys.path:
+    sys.path.insert(0, str(_ROOT / "app"))
+
+from portfolio_mode import mode_banner
+from lab_sidebar import render_execution_mode_block, render_navigation_guide, render_twin_lab_sidebar
 
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+
+from twin_sentry import llm_env
+
+llm_env.configure_ollama_for_baml(_ROOT)
 
 from twin_sentry.controller import run_twin_pipeline
 from twin_sentry.quantum_viz import (
@@ -145,116 +154,64 @@ def main() -> None:
         "R&D console for the **digital twin**: BAML policy, Rust TDSE simulation, "
         "Bloch-sphere views of reduced states, Langfuse-friendly audit."
     )
-
-    if "intent_box" not in st.session_state:
-        st.session_state.intent_box = SIDEBAR_PRESETS["Hadamard"]
+    st.session_state.setdefault("intent_text", SIDEBAR_PRESETS["Hadamard"])
 
     with st.sidebar:
-        st.header("Simulation")
-        n_steps = st.slider(
-            "RK4 steps",
-            min_value=16,
-            max_value=2048,
-            value=256,
-            step=16,
-            key="rk4_steps",
-        )
-        dt_exp = st.slider(
-            "log₁₀(dt / s)",
-            min_value=-14.0,
-            max_value=-9.0,
-            value=-11.5,
-            step=0.5,
-            key="dt_exp_slider",
-        )
-        dt = float(10**dt_exp)
-        st.caption(f"dt = {dt:.3e} s")
-
+        render_navigation_guide(current="twin")
         st.divider()
-        st.header("Quick presets")
-        for name in SIDEBAR_PRESETS:
-            if st.button(name, use_container_width=True, key=f"preset_{name}"):
-                st.session_state.intent_box = SIDEBAR_PRESETS[name]
-                st.rerun()
-
-        st.subheader("More sample prompts")
-        labels = [label for label, _ in SAMPLE_PROMPTS]
-        pick = st.selectbox(
-            "Pick a test prompt",
-            options=["(choose…)"] + labels,
-            key="sample_prompt_picker",
-        )
-        if st.button("Insert into command box", use_container_width=True, key="insert_sample"):
-            if pick and pick != "(choose…)":
-                for label, text in SAMPLE_PROMPTS:
-                    if label == pick:
-                        st.session_state.intent_box = text
-                        st.rerun()
-
+        render_execution_mode_block()
         st.divider()
-        st.subheader("Optional quantum cloud")
-        st.caption(
-            "Gate-equivalent circuit (Qiskit), not the Rust analog twin. "
-            "See `docs/quantum-cloud-backends.md`."
-        )
-        cloud_backend = st.selectbox(
-            "Submit circuit after twin",
-            options=["off", "local_aer", "ibm_quantum"],
-            index=0,
-            format_func=lambda x: {
-                "off": "Off (Rust twin only)",
-                "local_aer": "Qiskit Aer (local, pip install twinsentry-rs[quantum-cloud])",
-                "ibm_quantum": "IBM Quantum (QISKIT_IBM_TOKEN + pip install …[ibm-quantum])",
-            }[x],
-            key="cloud_backend_select",
-        )
-        cloud_shots = st.slider(
-            "Cloud shots",
-            min_value=256,
-            max_value=4096,
-            value=1024,
-            step=256,
-            key="cloud_shots",
+        from portfolio_mode import cloud_backend_selectbox
+
+        n_steps, dt, cloud_backend, cloud_shots = render_twin_lab_sidebar(
+            llm_env=llm_env,
+            sample_prompts=SAMPLE_PROMPTS,
+            sidebar_presets=SIDEBAR_PRESETS,
+            cloud_backend_selectbox_fn=cloud_backend_selectbox,
         )
 
-        st.divider()
-        st.subheader("Environment")
-        st.caption("`GOOGLE_API_KEY` → BAML/Gemini · `LANGFUSE_*` → traces")
-        lf_host = os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
-        st.code(lf_host, language=None)
+    mode_banner()
 
     col_a, col_b = st.columns((1.1, 0.9))
     with col_a:
         intent = st.text_area(
             "Command (natural language)",
-            key="intent_box",
+            key="intent_text",
             height=170,
             placeholder="Describe pulse intent or use presets…",
         )
     with col_b:
         st.subheader("Run pipeline")
         run = st.button("▶ Run digital twin", type="primary", use_container_width=True)
+        st.caption("First run may take 10–30s while Ollama loads the model.")
 
-    if run and intent.strip():
-        with st.spinner("BAML → Rust twin…"):
-            try:
-                result = run_twin_pipeline(
-                    intent.strip(),
-                    n_steps=n_steps,
-                    dt=dt,
-                    cloud_backend=None if cloud_backend == "off" else cloud_backend,
-                    cloud_shots=cloud_shots,
-                )
-                st.session_state["last_result"] = result
-            except Exception as e:
-                st.error(f"Pipeline failed: **{e}**")
-                with st.expander("Traceback (for debugging)"):
-                    st.code(traceback.format_exc(), language="python")
-                st.caption(
-                    "Check: `GOOGLE_API_KEY` for BAML, `maturin develop --features python` for the Rust twin, "
-                    "and optional `pip install 'twinsentry-rs[quantum-cloud]'` for local Aer."
-                )
-                st.session_state["last_result"] = None
+    if run:
+        if not intent.strip():
+            st.warning("Enter a command or pick a sidebar preset first.")
+        else:
+            with st.status("Running pipeline…", expanded=True) as status:
+                st.write("1/2 — BAML policy (Ollama)…")
+                try:
+                    result = run_twin_pipeline(
+                        intent.strip(),
+                        n_steps=n_steps,
+                        dt=dt,
+                        cloud_backend=None if cloud_backend == "off" else cloud_backend,
+                        cloud_shots=cloud_shots,
+                    )
+                    st.write("2/2 — Rust digital twin… done.")
+                    status.update(label="Run complete", state="complete", expanded=False)
+                    st.session_state["last_result"] = result
+                except Exception as e:
+                    status.update(label="Run failed", state="error", expanded=True)
+                    st.error(f"Pipeline failed: **{e}**")
+                    with st.expander("Traceback (for debugging)"):
+                        st.code(traceback.format_exc(), language="python")
+                    st.caption(
+                        "Check: `ollama serve`, `maturin develop --features python` for the Rust twin, "
+                        "and optional `pip install 'twinsentry-rs[quantum-cloud]'` for local Aer."
+                    )
+                    st.session_state["last_result"] = None
 
     result = st.session_state.get("last_result")
     if result:
@@ -323,6 +280,19 @@ def main() -> None:
         else:
             st.warning("State vector length is not 4; cannot plot Bloch spheres.")
 
+        sp = result.get("simulation_payload") or {}
+        if sp:
+            st.subheader("Simulation contract (MatrixQ-aligned)")
+            bt = sp.get("business_telemetry") or {}
+            csp1, csp2, csp3 = st.columns(3)
+            csp1.metric("Contract success", str(sp.get("success", False)))
+            meta = sp.get("quantum_metadata") or {}
+            csp2.metric("Qubits (metadata)", str(meta.get("allocated_qubits", "—")))
+            csp3.metric("Duration (ms)", f"{meta.get('execution_duration_ms', 0):.1f}")
+            if bt.get("max_safe_voltage_v") is not None:
+                st.caption(f"Business telemetry: max safe voltage **{bt['max_safe_voltage_v']} V**")
+            st.json(sp)
+
         tab_a, tab_b, tab_c = st.tabs(["Pulse & policy", "Audit & traces", "Raw JSON"])
         with tab_a:
             st.json(
@@ -331,9 +301,27 @@ def main() -> None:
                     "pulse_command": pc,
                     "noise_metadata": result.get("noise"),
                     "baml_error": result.get("baml_error"),
+                    "baml_log_path": result.get("baml_log_path"),
+                    "gate_mapping": result.get("gate_mapping"),
                     "cloud": result.get("cloud"),
                 }
             )
+            if result.get("gate_mapping"):
+                st.info(f"**Twin mapping:** {result['gate_mapping']}")
+            log_path = result.get("baml_log_path")
+            if log_path and Path(log_path).is_file():
+                st.caption(f"BAML log saved: `{log_path}`")
+                st.download_button(
+                    label="Download BAML call log (JSON)",
+                    data=Path(log_path).read_bytes(),
+                    file_name=Path(log_path).name,
+                    mime="application/json",
+                    use_container_width=True,
+                    key="dl_baml_log",
+                )
+            jsonl = _ROOT / "logs" / "baml" / "baml_calls.jsonl"
+            if jsonl.is_file():
+                st.caption(f"All calls append to `{jsonl}`")
             if result.get("baml_error"):
                 st.info(
                     "**BAML / LLM:** "
@@ -343,10 +331,16 @@ def main() -> None:
                 )
         with tab_b:
             tid = result.get("trace_id")
-            st.write("**Trace ID:**", tid or "(none — add Langfuse keys to env)")
+            lf_on = result.get("langfuse_enabled")
             if tid:
+                st.write("**Trace ID:**", tid)
                 st.code(str(tid), language=None)
-                st.caption("Use “Download trace_id.txt” above or select the code box to copy.")
+                st.caption("Use “Download trace_id.txt” above or open Langfuse → Traces.")
+            elif lf_on is False and llm_env.langfuse_status().get("keys_set"):
+                st.warning("Langfuse keys are set but this run had no trace (server down or instrumentation error).")
+            else:
+                st.write("**Trace ID:** (none)")
+                st.caption("Run `./scripts/start_langfuse.sh` then restart the lab.")
             host = os.environ.get("LANGFUSE_HOST", "http://localhost:3000").rstrip("/")
             st.markdown(f"[Langfuse UI]({host})")
         with tab_c:

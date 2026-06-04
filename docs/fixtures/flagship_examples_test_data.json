@@ -1,0 +1,184 @@
+{
+  "example_1_materials": {
+    "scenario_id": "li2s_ev_fast_charge",
+    "title": "Li\u2082S EV pouch \u2014 fast-charge safety limit",
+    "customer": "Aurora Cell Works (pilot line)",
+    "product": "Gen-2 Li\u2082S solid-electrolyte pouch (48 Ah)",
+    "atomic_structure": [
+      {
+        "site": "Li (1)",
+        "element": "Li",
+        "x_angstrom": 0.0,
+        "y_angstrom": 0.0,
+        "z_angstrom": 0.0
+      },
+      {
+        "site": "Li (2)",
+        "element": "Li",
+        "x_angstrom": 2.18,
+        "y_angstrom": 0.0,
+        "z_angstrom": 0.0
+      },
+      {
+        "site": "S",
+        "element": "S",
+        "x_angstrom": 1.09,
+        "y_angstrom": 1.88,
+        "z_angstrom": 0.0
+      }
+    ],
+    "simulation_parameters": {
+      "preset": "li2s",
+      "fermion_mapping": "jordan_wigner",
+      "ansatz_template": "uccsd_stub",
+      "active_qubits": 12,
+      "shots_per_iteration": 8192,
+      "spsa_iterations": 6,
+      "optimizer": "SPSA"
+    },
+    "baseline_before_optimization": {
+      "classical_runtime": "3 weeks (HPC queue)",
+      "charger_setting_v": 4.55,
+      "field_failure_risk": "High (micro-cracking observed at 4.5 V)",
+      "bond_length_angstrom": null
+    },
+    "reference_mock_outputs": {
+      "max_safe_voltage_v": 4.12,
+      "bond_length_angstrom": 2.16,
+      "ground_state_energy_hartree": -44.872,
+      "runtime_label": "3.8 minutes",
+      "vs_classical": "3 weeks \u2192 under 4 minutes"
+    },
+    "notes": "Geometry is a simplified Li\u2082S unit-cell stub for the demo. Production would load XYZ/CIF from the customer LMS."
+  },
+  "example_2_logistics": {
+    "scenario_id": "northeast_pharma_cold_chain",
+    "title": "Northeast pharma \u2014 cold-chain morning wave",
+    "customer": "MedRoute 3PL",
+    "depot": {
+      "name": "MedRoute Secaucus Cold-Chain DC",
+      "lat": 40.789,
+      "lon": -74.056
+    },
+    "fleet": {
+      "num_vehicles": 4,
+      "enforce_no_collision": true,
+      "total_payload_kg": 4215
+    },
+    "delivery_stops": [
+      {
+        "name": "Morristown Medical Center",
+        "lat": 40.789,
+        "lon": -74.477,
+        "window": "06:00-08:00",
+        "kg": 420
+      },
+      {
+        "name": "Hackensack University MC",
+        "lat": 40.881,
+        "lon": -74.043,
+        "window": "06:30-08:30",
+        "kg": 380
+      },
+      {
+        "name": "St. Barnabas Hospital",
+        "lat": 40.767,
+        "lon": -74.145,
+        "window": "07:00-09:00",
+        "kg": 290
+      },
+      {
+        "name": "RWJ New Brunswick",
+        "lat": 40.495,
+        "lon": -74.451,
+        "window": "07:00-09:30",
+        "kg": 510
+      },
+      {
+        "name": "Capital Health Trenton",
+        "lat": 40.221,
+        "lon": -74.756,
+        "window": "08:00-10:00",
+        "kg": 260
+      },
+      {
+        "name": "CVS Regional Hub Edison",
+        "lat": 40.518,
+        "lon": -74.411,
+        "window": "08:30-10:30",
+        "kg": 180
+      },
+      {
+        "name": "Walgreens DC Somerset",
+        "lat": 40.498,
+        "lon": -74.488,
+        "window": "09:00-11:00",
+        "kg": 220
+      },
+      {
+        "name": "ShopRite Pharmacy Newark",
+        "lat": 40.735,
+        "lon": -74.172,
+        "window": "09:00-11:30",
+        "kg": 150
+      },
+      {
+        "name": "Holy Name Medical Center",
+        "lat": 40.947,
+        "lon": -74.075,
+        "window": "10:00-12:00",
+        "kg": 340
+      },
+      {
+        "name": "Englewood Health",
+        "lat": 40.893,
+        "lon": -73.972,
+        "window": "10:00-12:00",
+        "kg": 275
+      },
+      {
+        "name": "Summit Medical Group",
+        "lat": 40.715,
+        "lon": -74.365,
+        "window": "11:00-13:00",
+        "kg": 190
+      },
+      {
+        "name": "Overlook Medical Center",
+        "lat": 40.708,
+        "lon": -74.327,
+        "window": "11:30-13:30",
+        "kg": 410
+      },
+      {
+        "name": "Clara Maass Medical",
+        "lat": 40.782,
+        "lon": -74.304,
+        "window": "12:00-14:00",
+        "kg": 230
+      },
+      {
+        "name": "Trinitas Regional MC",
+        "lat": 40.652,
+        "lon": -74.228,
+        "window": "12:30-14:30",
+        "kg": 360
+      }
+    ],
+    "planner_baseline": {
+      "planner_runtime": "6.2 hours (on-prem grid)",
+      "total_distance_km": 487,
+      "monthly_fuel_usd": 4200000,
+      "on_time_risk": "3 predicted window violations"
+    },
+    "reference_mock_outputs": {
+      "total_distance_km_optimized": 412,
+      "total_distance_km_naive": 487,
+      "distance_reduction_pct": 15.4,
+      "fuel_savings_usd_per_month": 4050000,
+      "runtime_label": "47 seconds",
+      "on_time_risk_after": "0 predicted violations"
+    },
+    "notes": "Stops are real facility names with lat/lon in the NY/NJ metro. Windows and kg loads are representative cold-chain test inputs."
+  }
+}

@@ -165,4 +165,14 @@ def submit_pulse_cloud(
     if cb in ("ibm", "ibm_quantum", "ibm_q"):
         circuit = pulse_command_to_circuit(cmd, gate_type)
         return run_ibm_quantum(circuit, shots=shots)
+    if cb in ("mock_ibm", "mock_ionq", "mock_rigetti"):
+        from twin_sentry.qpu_vendor_mock import submit_pulse_vendor_mock
+
+        return submit_pulse_vendor_mock(
+            cmd,
+            gate_type,
+            vendor=cb,  # type: ignore[arg-type]
+            shots=shots,
+            policy_approved=True,
+        )
     return {"ok": False, "error": f"Unknown cloud_backend: {cloud_backend!r}"}

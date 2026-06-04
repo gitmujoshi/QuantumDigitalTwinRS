@@ -4,6 +4,7 @@
 use crate::spsc::{pulse_queue as queue_new, PulseCommand, PulseReceiver, PulseSender};
 use crate::state::StateVector4;
 use crate::twin::TwinEngine;
+use num_complex::Complex32;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
@@ -128,6 +129,21 @@ impl PyTwinEngine {
 
     fn renormalize(&mut self) {
         self.inner.renormalize();
+    }
+
+    /// Set the 2-qubit state from four (re, im) pairs: |00⟩, |01⟩, |10⟩, |11⟩.
+    fn set_state(&mut self, coeffs: Vec<(f32, f32)>) -> PyResult<()> {
+        if coeffs.len() != 4 {
+            return Err(PyRuntimeError::new_err(format!(
+                "expected 4 amplitudes, got {}",
+                coeffs.len()
+            )));
+        }
+        for (i, (re, im)) in coeffs.into_iter().enumerate() {
+            self.inner.state.psi[i] = Complex32::new(re, im);
+        }
+        self.inner.renormalize();
+        Ok(())
     }
 
     fn state(&self) -> Vec<(f32, f32)> {
