@@ -39,3 +39,11 @@ logs/baml/
 
 # Local AeroQ scratch config
 .aeroq_tmp_config.yaml
+
+# Personal resumes / CVs
+*Resume*
+*resume*
+**/resume.md
+**/resume.pdf
+**/resume.docx
+**/cv.pdf
